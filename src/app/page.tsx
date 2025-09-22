@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useSession } from "next-auth/react";
 import NewTaskForm from "@/components/NewTaskForm";
 import TaskList from "@/components/TaskList";
@@ -17,29 +17,44 @@ export default function Page() {
   const { data: session, status } = useSession();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(5);
   const [items, setItems] = useState<Task[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
 
+  const [searchInput, setSearchInput] = useState(""); // reactive input value
+
+  // keep track of ongoing fetch
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   const fetchTasks = async () => {
-    console.log("fetching")
     if (!session) {
       setItems([]);
       return;
     }
+
+    // abort any previous request
+    if (abortControllerRef.current) {
+      console.log("aborting")
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     try {
       const url = `/api/tasks?q=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setItems(json.items);
       setTotalPages(json.totalPages);
       setTotal(json.total);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -49,6 +64,12 @@ export default function Page() {
     if (status === "authenticated") {
       fetchTasks();
     }
+    // cleanup: cancel fetch when unmounting or dependencies change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [status, q, page]);
 
   const created = async () => {
@@ -56,43 +77,68 @@ export default function Page() {
     fetchTasks();
   };
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setQ(searchInput);
+      setPage(1);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
+
   const refreshed = () => fetchTasks();
 
   return (
-    <div>
-      <div className="relative overflow-auto bg-white shadow min-h-[90vh]">
-
+    <div className="min-h-[90vh] bg-gradient-to-br bg-[#F6F4FF] p-6">
+      <div className="relative overflow-hidden bg-white shadow-lg rounded-3xl min-h-[85vh] p-6">
+        {/* Search Bar */}
         {status === "authenticated" && (
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-6 w-[94%] mx-auto">
             <input
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search tasks by title..."
-              className="flex-1 border rounded px-3 py-2"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="🔍 Search your tasks..."
+              className="flex-1 border border-gray-200 text-gray-600 rounded-full px-5 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all"
             />
-            <button onClick={fetchTasks} className="px-3 py-2 bg-slate-600 text-white rounded">Search</button>
           </div>
         )}
 
-        {!session &&
-          <div className="w-[90vw] h-[80vh] mx-auto mt-[4vh] rounded-xl flex items-center shadow">
-            <p className="text-center text-black font-bold text-[3vw] mx-auto">Sign in with Google to manage your tasks with Taskly.</p>
+        
+        {!session && (
+          <div className="w-[90%] h-[70vh] mx-auto mt-10 rounded-3xl flex items-center justify-center bg-gradient-to-r from-indigo-50 to-purple-50 shadow-inner">
+            <p className="text-center text-gray-800 font-semibold text-2xl sm:text-3xl leading-relaxed max-w-lg">
+              Sign in with <span className="text-indigo-600">Google</span> to
+              manage your tasks with <span className="font-bold">Taskly</span>.
+            </p>
           </div>
-        }
+        )}
 
+        
         {session && (
           <>
             <NewTaskForm onCreated={created} />
-            <div className="mt-4">
+            <div className="mt-8 space-y-6">
+             
               <div className="flex justify-between items-center mb-2">
-                <div className="text-sm text-gray-600">Total: {total}</div>
-                <div className="text-sm text-gray-600">Page {page} / {totalPages}</div>
+                <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                  Total tasks:{" "}
+                  <span className="font-medium text-gray-700">{total}</span>
+                </div>
+                <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                  Page {page} / {totalPages}
+                </div>
               </div>
+
+              
               <TaskList tasks={items} onToggled={refreshed} loading={loading} />
-              <Pagination page={page} totalPages={totalPages} onPageChange={(p) => setPage(p)} />
+
+              
+              <div className="mt-4">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(p) => setPage(p)}
+                />
+              </div>
             </div>
           </>
         )}
@@ -100,3 +146,4 @@ export default function Page() {
     </div>
   );
 }
+

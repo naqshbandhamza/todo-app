@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 
 export default function NewTaskForm({ onCreated }: { onCreated?: () => void }) {
@@ -34,15 +35,15 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void }) {
   };
 
   return (
-    <form onSubmit={submit} className="flex gap-2 items-start">
+    <form onSubmit={submit} className="flex gap-2 items-start w-[94vw] mx-auto">
       <input
-        className="flex-1 border rounded px-3 py-2"
+        className="flex-1 border rounded px-3 py-2 text-gray-600"
         placeholder="New task title..."
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         disabled={loading}
       />
-      <button className="px-4 py-2 bg-green-600 text-white rounded" disabled={loading}>
+      <button className="px-4 py-2 bg-[#4F39F6] text-white rounded hover:bg-gray-600" disabled={loading}>
         {loading ? "Saving..." : "Add"}
       </button>
       {error && <div className="w-full text-sm text-red-600 mt-2">{error}</div>}
