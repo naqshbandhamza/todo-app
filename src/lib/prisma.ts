@@ -2,7 +2,6 @@ import { PrismaClient } from "@prisma/client";
 
 declare global {
   // allow global caching in dev to avoid too many clients
-  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 

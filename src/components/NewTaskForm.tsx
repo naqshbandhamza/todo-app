@@ -27,8 +27,12 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void }) {
       }
       setTitle("");
       onCreated?.();
-    } catch (err: any) {
-      setError(err.message || "Error");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error(err.message);
+      } else {
+        console.error("Unexpected error", err);
+      }
     } finally {
       setLoading(false);
     }

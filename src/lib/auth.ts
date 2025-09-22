@@ -18,7 +18,7 @@ export const authOptions: NextAuthOptions = {
     // expose user.id on the session so client components can access it
     session: async ({ session, user }) => {
       if (session.user) {
-        (session.user as any).id = user.id;
+        session.user.id = user.id;
       }
       return session;
     }

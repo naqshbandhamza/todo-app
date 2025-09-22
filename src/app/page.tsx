@@ -34,11 +34,9 @@ export default function Page() {
       return;
     }
 
-    // abort any previous request
-    if (abortControllerRef.current) {
-      console.log("aborting")
-      abortControllerRef.current.abort();
-    }
+    // Cancel any in-flight request
+    abortControllerRef.current?.abort();
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -46,17 +44,33 @@ export default function Page() {
     try {
       const url = `/api/tasks?q=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`;
       const res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error("Failed to fetch");
+
+      // Prevent stale responses from overwriting state
+      if (controller.signal.aborted) return;
+
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+
       const json = await res.json();
-      setItems(json.items);
-      setTotalPages(json.totalPages);
-      setTotal(json.total);
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
-        console.error(err);
+
+      // Check again before updating state (in case it was aborted mid-way)
+      if (!controller.signal.aborted) {
+        setItems(json.items);
+        setTotalPages(json.totalPages);
+        setTotal(json.total);
+      }
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // Ignore silently
+      } else if (err instanceof Error) {
+        console.error("Fetch error:", err.message);
+      } else {
+        console.error("Unexpected error:", err);
       }
     } finally {
-      setLoading(false);
+      // Only clear loading if this is the active controller
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
@@ -102,7 +116,7 @@ export default function Page() {
           </div>
         )}
 
-        
+
         {!session && (
           <div className="w-[90%] h-[70vh] mx-auto mt-10 rounded-3xl flex items-center justify-center bg-gradient-to-r from-indigo-50 to-purple-50 shadow-inner">
             <p className="text-center text-gray-800 font-semibold text-2xl sm:text-3xl leading-relaxed max-w-lg">
@@ -112,12 +126,12 @@ export default function Page() {
           </div>
         )}
 
-        
+
         {session && (
           <>
             <NewTaskForm onCreated={created} />
-            <div className="mt-8 space-y-6">
-             
+            <div className="mt-8">
+
               <div className="flex justify-between items-center mb-2">
                 <div className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
                   Total tasks:{" "}
@@ -128,10 +142,10 @@ export default function Page() {
                 </div>
               </div>
 
-              
+
               <TaskList tasks={items} onToggled={refreshed} loading={loading} />
 
-              
+
               <div className="mt-4">
                 <Pagination
                   page={page}
